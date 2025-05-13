@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -48,30 +48,87 @@ export default function Home() {
   const [showMap, setShowMap] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedCollege, setSelectedCollege] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
+  const [hackathons, setHackathons] = useState<any[]>([]);
   const mapRef = useRef<any>(null);
+
+  useEffect(() => {
+    // Fetch all hackathons on mount
+    fetch("/api/hackathons")
+      .then(res => res.json())
+      .then(setHackathons);
+  }, []);
 
   const validateEmail = (email: string) => {
     return /.+@([\w-]+\.)?(edu|ac\.[a-z]{2})$/.test(email);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateEmail(email)) {
       setError("Please use a valid university email (.edu or .ac.xx)");
       return;
     }
     setError("");
-    setIsLoggedIn(true);
+    // Create user in backend
+    const res = await fetch("/api/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name: email.split("@")[0] })
+    });
+    if (res.ok) {
+      const userData = await res.json();
+      setUser(userData);
+      setIsLoggedIn(true);
+    } else {
+      setError("Failed to create user");
+    }
   };
 
-  const handleCreatePost = (data: any) => {
-    setPosts(prev => [...prev, { ...data, university: selectedCollege || "MIT", timestamp: new Date().toISOString() }]);
+  const handleCreatePost = async (data: any) => {
+    // Create hackathon in backend
+    const hackathonData = {
+      name: data.title,
+      date: new Date().toISOString(),
+      location: selectedCollege || "MIT",
+      info: data.description || "",
+      website: data.link
+    };
+    const res = await fetch("/api/hackathons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(hackathonData)
+    });
+    if (res.ok) {
+      const newHackathon = await res.json();
+      setHackathons(prev => [...prev, newHackathon]);
+    }
   };
 
-  // Filter posts for selected college
-  const filteredPosts = selectedCollege
-    ? posts.filter(post => post.university === selectedCollege)
+  // Filter hackathons for selected college
+  const filteredHackathons = selectedCollege
+    ? hackathons.filter(h => h.location === selectedCollege)
     : [];
+
+  // Register user for hackathon
+  const handleRegister = async (hackathonId: number) => {
+    if (!user) return;
+    // Add hackathon to user's acceptedHackathons
+    await fetch('/api/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id, hackathonId })
+    });
+    // Add user to hackathon's registeredStudents
+    await fetch('/api/hackathons', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hackathonId, userId: user.id })
+    });
+    // Refresh hackathons
+    const res = await fetch('/api/hackathons');
+    setHackathons(await res.json());
+  };
 
   // Search handler
   const handleSearch = () => {
@@ -155,7 +212,7 @@ export default function Home() {
           {selectedCollege && (
             <div className="w-[80%] bg-white/90 rounded-lg shadow p-6 mt-6 mb-8">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-xl text-blue-700">Posts for {selectedCollege}</h3>
+                <h3 className="font-bold text-xl text-blue-700">Hackathons for {selectedCollege}</h3>
                 <button
                   className="text-gray-400 hover:text-red-500 text-2xl"
                   onClick={() => setSelectedCollege(null)}
@@ -163,20 +220,25 @@ export default function Home() {
                   &times;
                 </button>
               </div>
-              {filteredPosts.length === 0 ? (
-                <div className="text-gray-500 text-sm">No posts for this college yet.</div>
+              {filteredHackathons.length === 0 ? (
+                <div className="text-gray-500 text-sm">No hackathons for this college yet.</div>
               ) : (
-                filteredPosts.map((post, i) => (
+                filteredHackathons.map((hackathon, i) => (
                   <div key={i} className="mb-4 border-b pb-2 last:border-b-0 last:pb-0">
-                    <div className="font-semibold">{post.title}</div>
-                    <div className="text-xs text-gray-500 mb-1">{post.university} • {new Date(post.timestamp).toLocaleString()}</div>
-                    <div className="text-sm mb-1">{post.description}</div>
-                    <a href={post.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-xs">{post.link}</a>
-                    {/* Interactions (only for logged in users) */}
+                    <div className="font-semibold">{hackathon.name}</div>
+                    <div className="text-xs text-gray-500 mb-1">{hackathon.location} • {new Date(hackathon.date).toLocaleString()}</div>
+                    <div className="text-sm mb-1">{hackathon.info}</div>
+                    <a href={hackathon.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-xs">{hackathon.website}</a>
+                    <div className="text-xs text-gray-500 mt-1">Registered Students: {hackathon.registeredStudents.length}</div>
                     {isLoggedIn ? (
                       <div className="mt-2 flex gap-2">
-                        <button className="text-xs bg-blue-100 px-2 py-1 rounded hover:bg-blue-200">Like</button>
-                        <button className="text-xs bg-blue-100 px-2 py-1 rounded hover:bg-blue-200">Comment</button>
+                        <button
+                          className="text-xs bg-blue-100 px-2 py-1 rounded hover:bg-blue-200"
+                          onClick={() => handleRegister(hackathon.id)}
+                          disabled={user && hackathon.registeredStudents.includes(user.id)}
+                        >
+                          {user && hackathon.registeredStudents.includes(user.id) ? 'Registered' : 'Register'}
+                        </button>
                       </div>
                     ) : null}
                   </div>
