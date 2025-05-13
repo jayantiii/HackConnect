@@ -1,1 +1,29 @@
-[] 
+[
+  {
+    "id": 1747165235053,
+    "name": "test",
+    "date": "2025-05-13T19:40:34.784Z",
+    "location": "University of Cambridge",
+    "info": "test",
+    "website": "https://github.com/jayantiii/HackConnect",
+    "registeredStudents": []
+  },
+  {
+    "id": 1747166800338,
+    "name": "asdfgh",
+    "date": "2025-05-13T20:06:39.927Z",
+    "location": "MIT",
+    "info": "asdfg",
+    "website": "https://github.com/jayantiii/HackConnect",
+    "registeredStudents": []
+  },
+  {
+    "id": 1747166887747,
+    "name": "asdfg",
+    "date": "2025-05-13T20:08:07.462Z",
+    "location": "MIT",
+    "info": "No Description",
+    "website": "https://github.com/jayantiii/HackConnect",
+    "registeredStudents": []
+  }
+]

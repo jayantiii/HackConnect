@@ -27,6 +27,8 @@ const universities: { name: string; posts: number; position: LatLngExpression }[
   },
 ];
 
+const collegeNames = universities.map(u => u.name);
+
 // Custom marker icon (fixes default icon issue in Next.js)
 const markerIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png",
@@ -86,14 +88,17 @@ export default function Home() {
   };
 
   const handleCreatePost = async (data: any) => {
+    if (!user) return;
     // Create hackathon in backend
     const hackathonData = {
       name: data.title,
       date: new Date().toISOString(),
-      location: selectedCollege || "MIT",
-      info: data.description || "",
-      website: data.link
+      location: data.college,
+      info: data.description ? data.description : "No Description",
+      website: data.link,
+      creatorId: user.id
     };
+    console.log('Posting hackathonData:', hackathonData);
     const res = await fetch("/api/hackathons", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -102,6 +107,26 @@ export default function Home() {
     if (res.ok) {
       const newHackathon = await res.json();
       setHackathons(prev => [...prev, newHackathon]);
+      console.log('Created post:', newHackathon);
+      // Fetch and log all hackathons
+      const allRes = await fetch('/api/hackathons');
+      const allHackathons = await allRes.json();
+      console.log('All hackathons:', allHackathons);
+    }
+  };
+
+  const handleDeleteHackathon = async (hackathonId: number) => {
+    if (!user) return;
+    const res = await fetch('/api/hackathons', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hackathonId, userId: user.id })
+    });
+    if (res.ok) {
+      setHackathons(prev => prev.filter(h => h.id !== hackathonId));
+    } else {
+      const err = await res.json();
+      alert(err.error || 'Failed to delete hackathon');
     }
   };
 
@@ -239,6 +264,14 @@ export default function Home() {
                         >
                           {user && hackathon.registeredStudents.includes(user.id) ? 'Registered' : 'Register'}
                         </button>
+                        {user && hackathon.creatorId === user.id && (
+                          <button
+                            className="text-xs bg-red-100 px-2 py-1 rounded hover:bg-red-200 ml-2"
+                            onClick={() => handleDeleteHackathon(hackathon.id)}
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     ) : null}
                   </div>
@@ -251,9 +284,59 @@ export default function Home() {
             isOpen={showModal}
             onClose={() => setShowModal(false)}
             onSubmit={handleCreatePost}
+            colleges={collegeNames}
           />
         </div>
       </div>
+      {/* Dedicated Events Section */}
+      <EventsSection
+        hackathons={hackathons}
+        onRegister={handleRegister}
+        user={user}
+        isLoggedIn={isLoggedIn}
+        onDelete={handleDeleteHackathon}
+      />
+    </div>
+  );
+}
+
+// Dedicated Events Section
+function EventsSection({ hackathons, onRegister, user, isLoggedIn, onDelete }: any) {
+  return (
+    <div className="w-full max-w-4xl mx-auto mt-8 mb-12 bg-white/95 rounded-xl shadow p-8">
+      <h2 className="text-2xl font-bold text-blue-700 mb-6">All Hackathon Events</h2>
+      {hackathons.length === 0 ? (
+        <div className="text-gray-500 text-sm">No hackathons have been posted yet.</div>
+      ) : (
+        hackathons.map((hackathon: any, i: number) => (
+          <div key={i} className="mb-6 border-b pb-4 last:border-b-0 last:pb-0">
+            <div className="font-semibold text-lg">{hackathon.name}</div>
+            <div className="text-xs text-gray-500 mb-1">{hackathon.location} • {new Date(hackathon.date).toLocaleString()}</div>
+            <div className="text-sm mb-1">{hackathon.info}</div>
+            <a href={hackathon.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-xs">{hackathon.website}</a>
+            <div className="text-xs text-gray-500 mt-1">Registered Students: {hackathon.registeredStudents.length}</div>
+            {isLoggedIn ? (
+              <div className="mt-2 flex gap-2">
+                <button
+                  className="text-xs bg-blue-100 px-2 py-1 rounded hover:bg-blue-200"
+                  onClick={() => onRegister(hackathon.id)}
+                  disabled={user && hackathon.registeredStudents.includes(user.id)}
+                >
+                  {user && hackathon.registeredStudents.includes(user.id) ? 'Registered' : 'Register'}
+                </button>
+                {user && hackathon.creatorId === user.id && (
+                  <button
+                    className="text-xs bg-red-100 px-2 py-1 rounded hover:bg-red-200 ml-2"
+                    onClick={() => onDelete(hackathon.id)}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            ) : null}
+          </div>
+        ))
+      )}
     </div>
   );
 }
