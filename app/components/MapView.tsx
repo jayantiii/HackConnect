@@ -6,8 +6,14 @@ import React from "react";
 
 interface University {
   name: string;
-  posts: number;
   position: LatLngExpression;
+  posts: number;
+  users: number;
+  address: {
+    city: string;
+    state: string;
+    country: string;
+  };
 }
 
 interface Post {
@@ -22,14 +28,15 @@ interface Post {
 interface MapViewProps {
   universities: University[];
   posts: Post[];
-  setSelectedCollege: (name: string | null) => void;
+  setSelectedCollege: (college: string | null) => void;
   selectedCollege: string | null;
   mapRef: any;
   handleSearch: () => void;
   search: string;
-  setSearch: (s: string) => void;
+  setSearch: (search: string) => void;
   isLoggedIn: boolean;
   onClose: () => void;
+  onAddFilter: (university: string) => void;
 }
 
 const markerIcon = new L.Icon({
@@ -52,64 +59,70 @@ export default function MapView({
   setSearch,
   isLoggedIn,
   onClose,
+  onAddFilter
 }: MapViewProps) {
   return (
-    <div className="w-full flex flex-col items-center">
-      <div className="w-[80%] h-[70vh] bg-white/80 rounded-xl shadow-lg overflow-hidden relative mt-8">
-        {/* Close button inside map */}
-        {isLoggedIn && (
-          <button
-            className="absolute top-4 right-4 z-40 text-2xl text-gray-400 hover:text-red-500 bg-white/80 rounded-full w-10 h-10 flex items-center justify-center shadow"
-            onClick={onClose}
-          >
-            &times;
-          </button>
-        )}
-        {/* Search bar inside map */}
-        <div className="absolute top-4 left-4 z-40 flex gap-2 w-[60%]">
+    <div className="w-full h-full relative">
+      <div className="absolute top-4 right-4 z-[1000] bg-white p-4 rounded-lg shadow-lg w-80">
+        <div className="flex items-center justify-center gap-2">
           <input
             type="text"
             placeholder="Search universities..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="p-2 rounded border border-gray-300 shadow focus:outline-none focus:ring-2 focus:ring-blue-400 w-full"
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            className="flex-1 p-2.5 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
           />
           <button
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 rounded"
             onClick={handleSearch}
+            className="bg-blue-600 text-white px-4 py-2.5 rounded hover:bg-blue-700 whitespace-nowrap"
           >
             Search
           </button>
         </div>
-        <MapContainer
-          center={[40, -30] as LatLngExpression}
-          zoom={2}
-          style={{ width: "100%", height: "100%" }}
-          scrollWheelZoom={true}
-          ref={mapRef}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution="&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors"
-          />
-          {universities.map((uni, idx) => (
-            <Marker
-              key={idx}
-              position={uni.position}
-              icon={markerIcon as L.Icon}
-              eventHandlers={{
-                click: () => setSelectedCollege(uni.name),
-              }}
-            >
-              <Popup>
-                <div className="font-semibold">{uni.name}</div>
-                <div className="text-sm text-gray-600">Posts: {posts.filter(p => p.university === uni.name).length}</div>
-                <div className="text-sm text-gray-600">Users: {uni.posts}</div>
-              </Popup>
-            </Marker>
-          ))}
-        </MapContainer>
       </div>
+      <MapContainer
+        center={[20, 0]}
+        zoom={2}
+        style={{ height: "100%", width: "100%" }}
+        ref={mapRef}
+      >
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        />
+        {universities.map((university) => (
+          <Marker
+            key={university.name}
+            position={university.position}
+            icon={markerIcon}
+          >
+            <Popup>
+              <div className="p-2">
+                <h3 className="font-bold text-lg mb-1">{university.name}</h3>
+                <p className="text-sm text-gray-600 mb-1">
+                  {university.address.city}, {university.address.state}
+                </p>
+                <p className="text-sm text-gray-600 mb-2">
+                  {university.address.country}
+                </p>
+                <div className="text-sm text-gray-600 mb-2">
+                  <p>Hackathons: {university.posts}</p>
+                  <p>Students: {university.users}</p>
+                </div>
+                {university.posts > 0 && (
+                  <button
+                    onClick={() => onAddFilter(university.name)}
+                    className="w-full bg-blue-100 hover:bg-blue-200 text-blue-800 text-sm font-medium py-1 px-2 rounded transition-colors"
+                  >
+                    Show Hackathon Events
+                  </button>
+                )}
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
     </div>
   );
 } 

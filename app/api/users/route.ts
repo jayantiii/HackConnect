@@ -28,26 +28,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
   const users = await readUsers();
-  const user = { id: Date.now(), ...data, acceptedHackathons: [] };
+  const user = { id: Date.now(), ...data, acceptedHackathons: [], university: null };
   users.push(user);
   await writeUsers(users);
   return NextResponse.json(user, { status: 201 });
 }
 
-// PATCH: Add hackathon to user's acceptedHackathons
+// PATCH: Update user's accepted hackathons or university
 export async function PATCH(req: NextRequest) {
-  const { userId, hackathonId } = await req.json();
-  if (!userId || !hackathonId) {
-    return NextResponse.json({ error: 'Missing userId or hackathonId' }, { status: 400 });
+  const { userId, hackathonId, university } = await req.json();
+  if (!userId) {
+    return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
   }
   const users = await readUsers();
   const user = users.find((u: any) => u.id === userId);
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
-  if (!user.acceptedHackathons.includes(hackathonId)) {
-    user.acceptedHackathons.push(hackathonId);
-    await writeUsers(users);
+  if (hackathonId) {
+    if (!user.acceptedHackathons.includes(hackathonId)) {
+      user.acceptedHackathons.push(hackathonId);
+    }
   }
+  if (university !== undefined) {
+    user.university = university;
+  }
+  await writeUsers(users);
   return NextResponse.json(user);
 } 

@@ -7,25 +7,7 @@ import L from "leaflet";
 import type { LatLngExpression } from "leaflet";
 import PostCreationModal from "./components/PostCreationModal";
 import dynamic from "next/dynamic";
-
-// Sample university data
-const universities: { name: string; posts: number; position: LatLngExpression }[] = [
-  {
-    name: "MIT",
-    posts: 5,
-    position: [42.3601, -71.0942],
-  },
-  {
-    name: "Stanford University",
-    posts: 3,
-    position: [37.4275, -122.1697],
-  },
-  {
-    name: "University of Cambridge",
-    posts: 2,
-    position: [52.2043, 0.1149],
-  },
-];
+import { universities, type University } from "./data/universities";
 
 const collegeNames = universities.map(u => u.name);
 
@@ -52,14 +34,32 @@ export default function Home() {
   const [selectedCollege, setSelectedCollege] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const [hackathons, setHackathons] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const mapRef = useRef<any>(null);
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
+  const [filterInput, setFilterInput] = useState("");
 
   useEffect(() => {
-    // Fetch all hackathons on mount
-    fetch("/api/hackathons")
-      .then(res => res.json())
-      .then(setHackathons);
+    // Fetch all hackathons and users on mount
+    Promise.all([
+      fetch("/api/hackathons").then(res => res.json()),
+      fetch("/api/users").then(res => res.json())
+    ]).then(([hackathonsData, usersData]) => {
+      setHackathons(hackathonsData);
+      setAllUsers(usersData);
+    });
   }, []);
+
+  // Calculate university stats
+  const universityStats = universities.map(uni => {
+    const universityHackathons = hackathons.filter(h => h.location === uni.name);
+    const universityUsers = allUsers.filter(u => u.university === uni.name);
+    return {
+      ...uni,
+      posts: universityHackathons.length,
+      users: universityUsers.length
+    };
+  });
 
   const validateEmail = (email: string) => {
     return /.+@([\w-]+\.)?(edu|ac\.[a-z]{2})$/.test(email);
@@ -72,18 +72,35 @@ export default function Home() {
       return;
     }
     setError("");
-    // Create user in backend
-    const res = await fetch("/api/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, name: email.split("@")[0] })
-    });
-    if (res.ok) {
-      const userData = await res.json();
-      setUser(userData);
+
+    // First check if user exists
+    const usersRes = await fetch("/api/users");
+    const users = await usersRes.json();
+    const existingUser = users.find((u: any) => u.email === email);
+
+    if (existingUser) {
+      // Log in existing user
+      setUser(existingUser);
       setIsLoggedIn(true);
     } else {
-      setError("Failed to create user");
+      // Create new user
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          email, 
+          name: email.split("@")[0],
+          university: "", // Initialize with empty university
+          acceptedHackathons: [] // Initialize with empty hackathons array
+        })
+      });
+      if (res.ok) {
+        const userData = await res.json();
+        setUser(userData);
+        setIsLoggedIn(true);
+      } else {
+        setError("Failed to create user");
+      }
     }
   };
 
@@ -96,7 +113,7 @@ export default function Home() {
       location: data.college,
       info: data.description ? data.description : "No Description",
       website: data.link,
-      creatorId: user.id
+      creatorEmail: user.email
     };
     console.log('Posting hackathonData:', hackathonData);
     const res = await fetch("/api/hackathons", {
@@ -120,7 +137,7 @@ export default function Home() {
     const res = await fetch('/api/hackathons', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hackathonId, userId: user.id })
+      body: JSON.stringify({ hackathonId, email: user.email })
     });
     if (res.ok) {
       setHackathons(prev => prev.filter(h => h.id !== hackathonId));
@@ -130,10 +147,34 @@ export default function Home() {
     }
   };
 
-  // Filter hackathons for selected college
-  const filteredHackathons = selectedCollege
-    ? hackathons.filter(h => h.location === selectedCollege)
-    : [];
+  // Filter hackathons based on active filters
+  const filteredHackathons = hackathons.filter(hackathon => {
+    if (activeFilters.length === 0) return true;
+    
+    // Get the university for this hackathon
+    const university = universities.find(u => u.name === hackathon.location);
+    
+    // Create an array of all searchable text
+    const searchableText = [
+      hackathon.location, // Include the hackathon's location directly
+      ...(university ? [
+        university.name,
+        university.address.city,
+        university.address.state,
+        university.address.country
+      ] : [])
+    ].map(text => text.toLowerCase());
+
+    // Check if any filter matches any part of the searchable text
+    return activeFilters.some(filter => {
+      const filterLower = filter.toLowerCase();
+      return searchableText.some(text => {
+        // Split the text into words and check if any word starts with the filter
+        const words = text.split(/\s+/);
+        return words.some((word: string) => word.startsWith(filterLower));
+      });
+    });
+  });
 
   // Register user for hackathon
   const handleRegister = async (hackathonId: number) => {
@@ -155,34 +196,109 @@ export default function Home() {
     setHackathons(await res.json());
   };
 
-  // Search handler
-  const handleSearch = () => {
-    if (!search.trim()) return;
-    const found = universities.find(u => u.name.toLowerCase().includes(search.toLowerCase()));
-    if (found && mapRef.current) {
-      mapRef.current.setView(found.position, 8);
-      setSelectedCollege(found.name);
+  const handleAddFilter = (university?: string) => {
+    const filterToAdd = university || filterInput.trim();
+    if (filterToAdd && !activeFilters.some(f => f.toLowerCase() === filterToAdd.toLowerCase())) {
+      setActiveFilters([...activeFilters, filterToAdd]);
+      setFilterInput("");
     }
   };
 
+  // Search handler
+  const handleSearch = () => {
+    if (!search.trim()) return;
+    const searchLower = search.toLowerCase();
+    
+    // First try to find a university
+    const foundUniversity = universities.find(u => {
+      const searchableText = [
+        u.name,
+        u.address.city,
+        u.address.state,
+        u.address.country
+      ].map(text => text.toLowerCase());
+      
+      return searchableText.some(text => {
+        const words = text.split(/\s+/);
+        return words.some((word: string) => word.startsWith(searchLower));
+      });
+    });
+
+    if (foundUniversity) {
+      if (mapRef.current) {
+        mapRef.current.setView(foundUniversity.position, 8);
+      }
+      handleAddFilter(foundUniversity.name);
+    } else {
+      // If no university found, try to find a hackathon with matching location
+      const matchingHackathon = hackathons.find(h => {
+        const words = h.location.toLowerCase().split(/\s+/);
+        return words.some((word: string) => word.startsWith(searchLower));
+      });
+      if (matchingHackathon) {
+        handleAddFilter(matchingHackathon.location);
+      }
+    }
+  };
+
+  const handleUniversityChange = async (university: string) => {
+    if (!user) return;
+    
+    // Update user's university in the backend
+    const res = await fetch('/api/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        userId: user.id, 
+        university,
+        email: user.email // Include email to identify user
+      })
+    });
+
+    if (res.ok) {
+      const updatedUser = await res.json();
+      setUser(updatedUser);
+      // Refresh users list
+      const usersRes = await fetch('/api/users');
+      setAllUsers(await usersRes.json());
+    } else {
+      const error = await res.json();
+      console.error('Failed to update university:', error);
+    }
+  };
+
+  const handleAddFilterFromInput = () => {
+    handleAddFilter();
+  };
+
+  const handleRemoveFilter = (filter: string) => {
+    setActiveFilters(activeFilters.filter(f => f !== filter));
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddFilter();
+    }
+  };
+
+  const handleSignOut = () => {
+    setUser(null);
+    setIsLoggedIn(false);
+    setEmail("");
+    setShowMap(false);
+    setSelectedCollege(null);
+    setActiveFilters([]);
+  };
+
   return (
-    <div className="flex flex-col min-h-screen">
-      {/* Top bar with Show/Hide Map button after login */}
-      {isLoggedIn && (
-        <div className="w-full flex justify-center items-center py-4 bg-white dark:bg-gray-900 shadow z-30">
-          <button
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded transition-colors"
-            onClick={() => setShowMap(v => !v)}
-          >
-            {showMap ? "Hide Map" : "Show Map"}
-          </button>
-        </div>
-      )}
-      <div className="flex flex-1">
-        {/* Left: Auth Form */}
-        <div className="w-full md:w-1/4 bg-white dark:bg-gray-900 flex flex-col justify-center items-center p-8 shadow-lg z-10">
+    <div className="flex min-h-screen">
+      {/* Left: Auth Form - Fixed Sidebar */}
+      <div className="w-full md:w-1/4 bg-white dark:bg-gray-900 shadow-lg z-10">
+        <div className="sticky top-0 h-screen flex items-center justify-center p-8">
           <div className="w-full max-w-xs">
-            <h1 className="text-3xl font-bold mb-6 text-center text-blue-700">HackConnect</h1>
+            <h1 className="text-3xl font-bold mb-2 text-center text-blue-700">HackConnect</h1>
+            <p className="text-sm text-gray-600 mb-6 text-center">by Nishanth Chidambaram and Jayanthi Lahoti</p>
             {!isLoggedIn ? (
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <input
@@ -207,136 +323,229 @@ export default function Home() {
                   <span className="block font-semibold text-lg">Welcome!</span>
                   <span className="block text-gray-600 text-sm">{email}</span>
                 </div>
-                <button
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition-colors w-full"
-                  onClick={() => setShowModal(true)}
-                >
-                  Create New Post
-                </button>
+                <div className="flex flex-col gap-2">
+                  <button
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition-colors w-full"
+                    onClick={() => setShowModal(true)}
+                  >
+                    Create New Post
+                  </button>
+                  <button
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded transition-colors w-full"
+                    onClick={handleSignOut}
+                  >
+                    Sign Out
+                  </button>
+                </div>
               </div>
             )}
           </div>
         </div>
-        {/* Right: Map View (conditionally rendered) */}
-        <div className="hidden md:block w-3/4 relative bg-gradient-to-br from-blue-100 to-blue-300 flex flex-col items-center justify-start">
+      </div>
+
+      {/* Right: Main Content Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Top bar with Show/Hide Map button after login */}
+        {isLoggedIn && (
+          <div className="w-full flex justify-center items-center py-4 bg-white dark:bg-gray-900 shadow z-30">
+            <div className="flex gap-4 items-center">
+              <select
+                value={user?.university || ''}
+                onChange={(e) => handleUniversityChange(e.target.value)}
+                className="p-2 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select University</option>
+                {collegeNames.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <button
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded transition-colors"
+                onClick={() => setShowMap(v => !v)}
+              >
+                {showMap ? "Hide Map" : "Show Map"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Map and Events Container */}
+        <div className="flex-1 flex flex-col">
+          {/* Map Section */}
           {(!isLoggedIn || showMap) && (
-            <MapView
-              universities={universities}
-              posts={posts}
-              setSelectedCollege={setSelectedCollege}
-              selectedCollege={selectedCollege}
-              mapRef={mapRef}
-              handleSearch={handleSearch}
-              search={search}
-              setSearch={setSearch}
-              isLoggedIn={isLoggedIn}
-              onClose={() => setShowMap(false)}
-            />
-          )}
-          {/* Posts Section for selected college */}
-          {selectedCollege && (
-            <div className="w-[80%] bg-white/90 rounded-lg shadow p-6 mt-6 mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-xl text-blue-700">Hackathons for {selectedCollege}</h3>
-                <button
-                  className="text-gray-400 hover:text-red-500 text-2xl"
-                  onClick={() => setSelectedCollege(null)}
-                >
-                  &times;
-                </button>
-              </div>
-              {filteredHackathons.length === 0 ? (
-                <div className="text-gray-500 text-sm">No hackathons for this college yet.</div>
-              ) : (
-                filteredHackathons.map((hackathon, i) => (
-                  <div key={i} className="mb-4 border-b pb-2 last:border-b-0 last:pb-0">
-                    <div className="font-semibold">{hackathon.name}</div>
-                    <div className="text-xs text-gray-500 mb-1">{hackathon.location} • {new Date(hackathon.date).toLocaleString()}</div>
-                    <div className="text-sm mb-1">{hackathon.info}</div>
-                    <a href={hackathon.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-xs">{hackathon.website}</a>
-                    <div className="text-xs text-gray-500 mt-1">Registered Students: {hackathon.registeredStudents.length}</div>
-                    {isLoggedIn ? (
-                      <div className="mt-2 flex gap-2">
-                        <button
-                          className="text-xs bg-blue-100 px-2 py-1 rounded hover:bg-blue-200"
-                          onClick={() => handleRegister(hackathon.id)}
-                          disabled={user && hackathon.registeredStudents.includes(user.id)}
-                        >
-                          {user && hackathon.registeredStudents.includes(user.id) ? 'Registered' : 'Register'}
-                        </button>
-                        {user && hackathon.creatorId === user.id && (
-                          <button
-                            className="text-xs bg-red-100 px-2 py-1 rounded hover:bg-red-200 ml-2"
-                            onClick={() => handleDeleteHackathon(hackathon.id)}
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                    ) : null}
+            <div className="h-[66vh] relative bg-gradient-to-br from-blue-100 to-blue-300">
+              <MapView
+                universities={universityStats}
+                posts={posts}
+                setSelectedCollege={setSelectedCollege}
+                selectedCollege={selectedCollege}
+                mapRef={mapRef}
+                handleSearch={handleSearch}
+                search={search}
+                setSearch={setSearch}
+                isLoggedIn={isLoggedIn}
+                onClose={() => setShowMap(false)}
+                onAddFilter={handleAddFilter}
+              />
+              {/* Posts Section for selected college */}
+              {selectedCollege && (
+                <div className="w-[80%] bg-white/90 rounded-lg shadow p-6 mt-6 mb-8 mx-auto">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-xl text-blue-700">Hackathons for {selectedCollege}</h3>
+                    <button
+                      className="text-gray-400 hover:text-red-500 text-2xl"
+                      onClick={() => setSelectedCollege(null)}
+                    >
+                      &times;
+                    </button>
                   </div>
-                ))
+                  {filteredHackathons.length === 0 ? (
+                    <div className="text-gray-500 text-sm">No hackathons for this college yet.</div>
+                  ) : (
+                    filteredHackathons.map((hackathon, i) => (
+                      <div key={i} className="mb-4 border-b pb-2 last:border-b-0 last:pb-0">
+                        <div className="font-semibold">{hackathon.name}</div>
+                        <div className="text-xs text-gray-500 mb-1">{hackathon.location} • {new Date(hackathon.date).toLocaleString()}</div>
+                        <div className="text-sm mb-1">{hackathon.info}</div>
+                        <a href={hackathon.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-xs">{hackathon.website}</a>
+                        <div className="text-xs text-gray-500 mt-1">Registered Students: {hackathon.registeredStudents.length}</div>
+                        {isLoggedIn ? (
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              className="text-xs bg-blue-100 px-2 py-1 rounded hover:bg-blue-200"
+                              onClick={() => handleRegister(hackathon.id)}
+                              disabled={user && hackathon.registeredStudents.includes(user.id)}
+                            >
+                              {user && hackathon.registeredStudents.includes(user.id) ? 'Registered' : 'Register'}
+                            </button>
+                            {user && hackathon.creatorEmail === user.email && (
+                              <button
+                                className="text-xs bg-red-100 px-2 py-1 rounded hover:bg-red-200 ml-2"
+                                onClick={() => handleDeleteHackathon(hackathon.id)}
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
+                </div>
               )}
             </div>
           )}
-          {/* Modal at root level for proper overlay */}
-          <PostCreationModal
-            isOpen={showModal}
-            onClose={() => setShowModal(false)}
-            onSubmit={handleCreatePost}
-            colleges={collegeNames}
-          />
+
+          {/* Events Section */}
+          <div className={`w-full max-w-4xl mx-auto ${isLoggedIn && !showMap ? 'mt-0' : 'mt-8'} mb-12 bg-white/95 rounded-xl shadow p-8`}>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-blue-700">
+                {selectedCollege ? `Hackathons at ${selectedCollege}` : 'All Hackathon Events'}
+              </h2>
+              {selectedCollege && (
+                <button
+                  onClick={() => setSelectedCollege(null)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  Clear Selection
+                </button>
+              )}
+            </div>
+
+            {/* Filter Section */}
+            <div className="mb-6">
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  placeholder="Type university name to filter..."
+                  value={filterInput}
+                  onChange={(e) => setFilterInput(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  className="flex-1 p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                />
+                <button
+                  onClick={handleAddFilterFromInput}
+                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                >
+                  Add Filter
+                </button>
+              </div>
+              {activeFilters.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {activeFilters.map((filter) => (
+                    <div
+                      key={filter}
+                      className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full flex items-center gap-2"
+                    >
+                      <span>{filter}</span>
+                      <button
+                        onClick={() => handleRemoveFilter(filter)}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {filteredHackathons.length === 0 ? (
+              <div className="text-gray-500 text-sm">No hackathons found.</div>
+            ) : (
+              filteredHackathons.map((hackathon: any, i: number) => (
+                <div key={i} className="mb-6 border-b pb-4 last:border-b-0 last:pb-0">
+                  <div className="font-semibold text-lg text-black">{hackathon.name}</div>
+                  <div className="text-xs text-gray-500 mb-1">
+                    {hackathon.location} • {new Date(hackathon.date).toLocaleString()}
+                  </div>
+                  <div className="text-sm mb-1 text-black">{hackathon.info}</div>
+                  <a
+                    href={hackathon.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 underline text-xs"
+                  >
+                    {hackathon.website}
+                  </a>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Registered Students: {hackathon.registeredStudents.length}
+                  </div>
+                  {isLoggedIn ? (
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        className="text-xs bg-blue-100 px-2 py-1 rounded hover:bg-blue-200"
+                        onClick={() => handleRegister(hackathon.id)}
+                        disabled={user && hackathon.registeredStudents.includes(user.id)}
+                      >
+                        {user && hackathon.registeredStudents.includes(user.id)
+                          ? 'Registered'
+                          : 'Register'}
+                      </button>
+                      {user && hackathon.creatorEmail === user.email && (
+                        <button
+                          className="text-xs bg-red-100 px-2 py-1 rounded hover:bg-red-200 ml-2"
+                          onClick={() => handleDeleteHackathon(hackathon.id)}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
-      {/* Dedicated Events Section */}
-      <EventsSection
-        hackathons={hackathons}
-        onRegister={handleRegister}
-        user={user}
-        isLoggedIn={isLoggedIn}
-        onDelete={handleDeleteHackathon}
-      />
-    </div>
-  );
-}
 
-// Dedicated Events Section
-function EventsSection({ hackathons, onRegister, user, isLoggedIn, onDelete }: any) {
-  return (
-    <div className="w-full max-w-4xl mx-auto mt-8 mb-12 bg-white/95 rounded-xl shadow p-8">
-      <h2 className="text-2xl font-bold text-blue-700 mb-6">All Hackathon Events</h2>
-      {hackathons.length === 0 ? (
-        <div className="text-gray-500 text-sm">No hackathons have been posted yet.</div>
-      ) : (
-        hackathons.map((hackathon: any, i: number) => (
-          <div key={i} className="mb-6 border-b pb-4 last:border-b-0 last:pb-0">
-            <div className="font-semibold text-lg">{hackathon.name}</div>
-            <div className="text-xs text-gray-500 mb-1">{hackathon.location} • {new Date(hackathon.date).toLocaleString()}</div>
-            <div className="text-sm mb-1">{hackathon.info}</div>
-            <a href={hackathon.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-xs">{hackathon.website}</a>
-            <div className="text-xs text-gray-500 mt-1">Registered Students: {hackathon.registeredStudents.length}</div>
-            {isLoggedIn ? (
-              <div className="mt-2 flex gap-2">
-                <button
-                  className="text-xs bg-blue-100 px-2 py-1 rounded hover:bg-blue-200"
-                  onClick={() => onRegister(hackathon.id)}
-                  disabled={user && hackathon.registeredStudents.includes(user.id)}
-                >
-                  {user && hackathon.registeredStudents.includes(user.id) ? 'Registered' : 'Register'}
-                </button>
-                {user && hackathon.creatorId === user.id && (
-                  <button
-                    className="text-xs bg-red-100 px-2 py-1 rounded hover:bg-red-200 ml-2"
-                    onClick={() => onDelete(hackathon.id)}
-                  >
-                    Delete
-                  </button>
-                )}
-              </div>
-            ) : null}
-          </div>
-        ))
-      )}
+      {/* Modal at root level for proper overlay */}
+      <PostCreationModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        onSubmit={handleCreatePost}
+        colleges={collegeNames}
+      />
     </div>
   );
 }

@@ -25,5 +25,15 @@
     "info": "No Description",
     "website": "https://github.com/jayantiii/HackConnect",
     "registeredStudents": []
+  },
+  {
+    "id": 1747903582432,
+    "name": "111",
+    "date": "2025-05-22T08:46:22.252Z",
+    "location": "University of Cambridge",
+    "info": "No Description",
+    "website": "https://github.com/jayantiii/HackConnect",
+    "creatorId": 1747903559006,
+    "registeredStudents": []
   }
 ]

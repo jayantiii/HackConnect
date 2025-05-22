@@ -24,7 +24,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const data = await req.json();
-  if (!data.name || !data.date || !data.location || !data.info || !data.website || !data.creatorId) {
+  if (!data.name || !data.date || !data.location || !data.info || !data.website || !data.creatorEmail) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
   const hackathons = await readHackathons();
@@ -54,16 +54,16 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE: Only creator can delete their hackathon
 export async function DELETE(req: NextRequest) {
-  const { hackathonId, userId } = await req.json();
-  if (!hackathonId || !userId) {
-    return NextResponse.json({ error: 'Missing hackathonId or userId' }, { status: 400 });
+  const { hackathonId, email } = await req.json();
+  if (!hackathonId || !email) {
+    return NextResponse.json({ error: 'Missing hackathonId or email' }, { status: 400 });
   }
   let hackathons = await readHackathons();
   const hackathon = hackathons.find((h: any) => h.id === hackathonId);
   if (!hackathon) {
     return NextResponse.json({ error: 'Hackathon not found' }, { status: 404 });
   }
-  if (hackathon.creatorId !== userId) {
+  if (hackathon.creatorEmail !== email) {
     return NextResponse.json({ error: 'Not authorized' }, { status: 403 });
   }
   hackathons = hackathons.filter((h: any) => h.id !== hackathonId);
