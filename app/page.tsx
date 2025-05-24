@@ -39,6 +39,24 @@ export default function Home() {
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [filterInput, setFilterInput] = useState("");
 
+  // Check for stored user data on mount
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      const userData = JSON.parse(storedUser);
+      setUser(userData);
+      setIsLoggedIn(true);
+      setEmail(userData.email);
+    }
+  }, []);
+
+  // Store user data in localStorage when logged in
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('user', JSON.stringify(user));
+    }
+  }, [user]);
+
   useEffect(() => {
     // Fetch all hackathons and users on mount
     Promise.all([
@@ -209,35 +227,16 @@ export default function Home() {
     if (!search.trim()) return;
     const searchLower = search.toLowerCase();
     
-    // First try to find a university
-    const foundUniversity = universities.find(u => {
-      const searchableText = [
-        u.name,
-        u.address.city,
-        u.address.state,
-        u.address.country
-      ].map(text => text.toLowerCase());
-      
-      return searchableText.some(text => {
-        const words = text.split(/\s+/);
-        return words.some((word: string) => word.startsWith(searchLower));
-      });
-    });
+    // Find a university by name
+    const foundUniversity = universities.find(u => 
+      u.name.toLowerCase().includes(searchLower)
+    );
 
     if (foundUniversity) {
       if (mapRef.current) {
         mapRef.current.setView(foundUniversity.position, 8);
       }
       handleAddFilter(foundUniversity.name);
-    } else {
-      // If no university found, try to find a hackathon with matching location
-      const matchingHackathon = hackathons.find(h => {
-        const words = h.location.toLowerCase().split(/\s+/);
-        return words.some((word: string) => word.startsWith(searchLower));
-      });
-      if (matchingHackathon) {
-        handleAddFilter(matchingHackathon.location);
-      }
     }
   };
 
@@ -289,6 +288,7 @@ export default function Home() {
     setShowMap(false);
     setSelectedCollege(null);
     setActiveFilters([]);
+    localStorage.removeItem('user'); // Clear stored user data
   };
 
   return (

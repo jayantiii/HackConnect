@@ -1,20 +1,10 @@
 "use client";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import type { LatLngExpression } from "leaflet";
 import React from "react";
-
-interface University {
-  name: string;
-  position: LatLngExpression;
-  posts: number;
-  users: number;
-  address: {
-    city: string;
-    state: string;
-    country: string;
-  };
-}
+import { universities, type University } from "../data/universities";
 
 interface Post {
   title: string;
@@ -30,7 +20,7 @@ interface MapViewProps {
   posts: Post[];
   setSelectedCollege: (college: string | null) => void;
   selectedCollege: string | null;
-  mapRef: any;
+  mapRef: React.RefObject<any>;
   handleSearch: () => void;
   search: string;
   setSearch: (search: string) => void;
@@ -88,36 +78,31 @@ export default function MapView({
         ref={mapRef}
       >
         <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         {universities.map((university) => (
           <Marker
             key={university.name}
-            position={university.position}
+            position={university.position as LatLngExpression}
             icon={markerIcon}
           >
             <Popup>
-              <div className="p-2">
-                <h3 className="font-bold text-lg mb-1">{university.name}</h3>
-                <p className="text-sm text-gray-600 mb-1">
+              <div className="text-center">
+                <h3 className="font-bold mb-2">{university.name}</h3>
+                <p className="text-sm text-gray-600">
                   {university.address.city}, {university.address.state}
                 </p>
-                <p className="text-sm text-gray-600 mb-2">
-                  {university.address.country}
+                <p className="text-sm text-gray-600">{university.address.country}</p>
+                <p className="text-sm text-gray-600 mt-2">
+                  Posts: {university.posts} | Users: {university.users}
                 </p>
-                <div className="text-sm text-gray-600 mb-2">
-                  <p>Hackathons: {university.posts}</p>
-                  <p>Students: {university.users}</p>
-                </div>
-                {university.posts > 0 && (
-                  <button
-                    onClick={() => onAddFilter(university.name)}
-                    className="w-full bg-blue-100 hover:bg-blue-200 text-blue-800 text-sm font-medium py-1 px-2 rounded transition-colors"
-                  >
-                    Show Hackathon Events
-                  </button>
-                )}
+                <button
+                  onClick={() => onAddFilter(university.name)}
+                  className="mt-3 w-full bg-blue-100 hover:bg-blue-200 text-blue-800 text-sm font-medium py-1.5 px-3 rounded transition-colors"
+                >
+                  Show Hackathons
+                </button>
               </div>
             </Popup>
           </Marker>
