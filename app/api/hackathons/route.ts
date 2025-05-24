@@ -36,8 +36,8 @@ export async function POST(req: NextRequest) {
 
 // PATCH: Register a student to a hackathon
 export async function PATCH(req: NextRequest) {
-  const { hackathonId, userId } = await req.json();
-  if (!hackathonId || !userId) {
+  const { hackathonId, registrationData } = await req.json();
+  if (!hackathonId || !registrationData.userId) {
     return NextResponse.json({ error: 'Missing hackathonId or userId' }, { status: 400 });
   }
   const hackathons = await readHackathons();
@@ -45,10 +45,11 @@ export async function PATCH(req: NextRequest) {
   if (!hackathon) {
     return NextResponse.json({ error: 'Hackathon not found' }, { status: 404 });
   }
-  if (!hackathon.registeredStudents.includes(userId)) {
-    hackathon.registeredStudents.push(userId);
-    await writeHackathons(hackathons);
+  if (hackathon.registeredStudents.some((s: any) => s.userId === registrationData.userId)) {
+    return NextResponse.json({ error: 'Already registered' }, { status: 400 });
   }
+  hackathon.registeredStudents.push(registrationData);
+  await writeHackathons(hackathons);
   return NextResponse.json(hackathon);
 }
 

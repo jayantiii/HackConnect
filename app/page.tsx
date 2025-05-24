@@ -8,6 +8,8 @@ import type { LatLngExpression } from "leaflet";
 import PostCreationModal from "./components/PostCreationModal";
 import dynamic from "next/dynamic";
 import { universities, type University } from "./data/universities";
+import RegistrationModal, { type RegistrationData } from "./components/RegistrationModal";
+import RegisteredStudentsModal from "./components/RegisteredStudentsModal";
 
 const collegeNames = universities.map(u => u.name);
 
@@ -38,6 +40,10 @@ export default function Home() {
   const mapRef = useRef<any>(null);
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [filterInput, setFilterInput] = useState("");
+  const [showRegistrationModal, setShowRegistrationModal] = useState(false);
+  const [selectedHackathon, setSelectedHackathon] = useState<any>(null);
+  const [showRegisteredStudentsModal, setShowRegisteredStudentsModal] = useState(false);
+  const [selectedHackathonForStudents, setSelectedHackathonForStudents] = useState<any>(null);
 
   // Check for stored user data on mount
   useEffect(() => {
@@ -197,21 +203,68 @@ export default function Home() {
   // Register user for hackathon
   const handleRegister = async (hackathonId: number) => {
     if (!user) return;
-    // Add hackathon to user's acceptedHackathons
-    await fetch('/api/users', {
+    const hackathon = hackathons.find(h => h.id === hackathonId);
+    if (hackathon) {
+      setSelectedHackathon(hackathon);
+      setShowRegistrationModal(true);
+    }
+  };
+
+  const handleRegistrationSubmit = async (data: RegistrationData) => {
+    if (!selectedHackathon || !user) return;
+
+    // Add registration data to hackathon
+    const updatedHackathon = {
+      ...selectedHackathon,
+      registeredStudents: [
+        ...(selectedHackathon.registeredStudents || []),
+        {
+          userId: user.id,
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          description: data.description
+        }
+      ]
+    };
+
+    // Update hackathon in backend
+    const res = await fetch('/api/hackathons', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id, hackathonId })
+      body: JSON.stringify({ 
+        hackathonId: selectedHackathon.id, 
+        registrationData: {
+          userId: user.id,
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          description: data.description
+        }
+      })
     });
-    // Add user to hackathon's registeredStudents
-    await fetch('/api/hackathons', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hackathonId, userId: user.id })
-    });
-    // Refresh hackathons
-    const res = await fetch('/api/hackathons');
-    setHackathons(await res.json());
+
+    if (res.ok) {
+      // Update local state
+      setHackathons(prev => prev.map(h => 
+        h.id === selectedHackathon.id ? updatedHackathon : h
+      ));
+      setShowRegistrationModal(false);
+      setSelectedHackathon(null);
+      
+      // Refresh hackathons to ensure we have the latest data
+      const refreshRes = await fetch('/api/hackathons');
+      const updatedHackathons = await refreshRes.json();
+      setHackathons(updatedHackathons);
+    } else {
+      const error = await res.json();
+      if (error.error === 'Already registered') {
+        alert('Already registered');
+      } else {
+        console.error('Failed to register:', error);
+        alert('Failed to register for the hackathon. Please try again.');
+      }
+    }
   };
 
   const handleAddFilter = (university?: string) => {
@@ -416,7 +469,18 @@ export default function Home() {
                               onClick={() => handleRegister(hackathon.id)}
                               disabled={user && hackathon.registeredStudents.includes(user.id)}
                             >
-                              {user && hackathon.registeredStudents.includes(user.id) ? 'Registered' : 'Register'}
+                              {user && hackathon.registeredStudents.includes(user.id)
+                                ? 'Registered'
+                                : 'Register'}
+                            </button>
+                            <button
+                              className="text-xs bg-gray-100 px-2 py-1 rounded hover:bg-gray-200"
+                              onClick={() => {
+                                setSelectedHackathonForStudents(hackathon);
+                                setShowRegisteredStudentsModal(true);
+                              }}
+                            >
+                              View Students ({hackathon.registeredStudents.length})
                             </button>
                             {user && hackathon.creatorEmail === user.email && (
                               <button
@@ -522,6 +586,15 @@ export default function Home() {
                           ? 'Registered'
                           : 'Register'}
                       </button>
+                      <button
+                        className="text-xs bg-gray-100 px-2 py-1 rounded hover:bg-gray-200"
+                        onClick={() => {
+                          setSelectedHackathonForStudents(hackathon);
+                          setShowRegisteredStudentsModal(true);
+                        }}
+                      >
+                        View Students ({hackathon.registeredStudents.length})
+                      </button>
                       {user && hackathon.creatorEmail === user.email && (
                         <button
                           className="text-xs bg-red-100 px-2 py-1 rounded hover:bg-red-200 ml-2"
@@ -545,6 +618,28 @@ export default function Home() {
         onClose={() => setShowModal(false)}
         onSubmit={handleCreatePost}
         colleges={collegeNames}
+      />
+
+      {/* Registration Modal */}
+      <RegistrationModal
+        isOpen={showRegistrationModal}
+        onClose={() => {
+          setShowRegistrationModal(false);
+          setSelectedHackathon(null);
+        }}
+        onSubmit={handleRegistrationSubmit}
+        hackathonName={selectedHackathon?.name || ''}
+      />
+
+      {/* Registered Students Modal */}
+      <RegisteredStudentsModal
+        isOpen={showRegisteredStudentsModal}
+        onClose={() => {
+          setShowRegisteredStudentsModal(false);
+          setSelectedHackathonForStudents(null);
+        }}
+        hackathonName={selectedHackathonForStudents?.name || ''}
+        registeredStudents={selectedHackathonForStudents?.registeredStudents || []}
       />
     </div>
   );

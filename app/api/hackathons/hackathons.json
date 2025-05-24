@@ -34,6 +34,21 @@
     "info": "No Description",
     "website": "https://github.com/jayantiii/HackConnect",
     "creatorId": 1747903559006,
-    "registeredStudents": []
+    "registeredStudents": [
+      {
+        "userId": 1748061819078,
+        "name": "1111",
+        "email": "1111@mail.edu",
+        "phone": "7418529630",
+        "description": "test"
+      },
+      {
+        "userId": 1748061979516,
+        "name": "2222",
+        "email": "2222@mail.edu",
+        "phone": "9685274100",
+        "description": "asdfghj"
+      }
+    ]
   }
 ]
