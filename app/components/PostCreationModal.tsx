@@ -10,14 +10,17 @@ interface PostCreationModalProps {
     link: string;
     type: "Hackathon Team" | "Side Project Team";
     description?: string;
+    college: string;
   }) => void;
+  colleges: string[];
 }
 
-export default function PostCreationModal({ isOpen, onClose, onSubmit }: PostCreationModalProps) {
+export default function PostCreationModal({ isOpen, onClose, onSubmit, colleges }: PostCreationModalProps) {
   const [title, setTitle] = useState("");
   const [link, setLink] = useState("");
   const [type, setType] = useState<"Hackathon Team" | "Side Project Team">("Hackathon Team");
   const [description, setDescription] = useState("");
+  const [college, setCollege] = useState(colleges[0] || "");
   const [error, setError] = useState("");
 
   if (!isOpen) return null;
@@ -42,11 +45,12 @@ export default function PostCreationModal({ isOpen, onClose, onSubmit }: PostCre
       return;
     }
     setError("");
-    onSubmit({ title, link, type, description });
+    onSubmit({ title, link, type, description, college });
     setTitle("");
     setLink("");
     setType("Hackathon Team");
     setDescription("");
+    setCollege(colleges[0] || "");
     onClose();
   };
 
@@ -79,6 +83,15 @@ export default function PostCreationModal({ isOpen, onClose, onSubmit }: PostCre
           >
             <option value="Hackathon Team">Hackathon Team</option>
             <option value="Side Project Team">Side Project Team</option>
+          </select>
+          <select
+            value={college}
+            onChange={e => setCollege(e.target.value)}
+            className="p-3 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {colleges.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
           </select>
           <textarea
             placeholder="Description (optional)"
