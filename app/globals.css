@@ -4,6 +4,21 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --card-background: #ffffff;
+  --card-foreground: #171717;
+  --border-color: #e5e7eb;
+  --input-background: #ffffff;
+  --input-foreground: #171717;
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --card-background: #1a1a1a;
+  --card-foreground: #ededed;
+  --border-color: #2d2d2d;
+  --input-background: #2d2d2d;
+  --input-foreground: #ededed;
 }
 
 @theme inline {
@@ -13,15 +28,42 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Dark mode styles for Leaflet map */
+.dark .leaflet-container {
+  background-color: #1a1a1a;
+}
+
+.dark .leaflet-popup-content-wrapper {
+  background-color: #2d2d2d;
+  color: #ededed;
+}
+
+.dark .leaflet-popup-tip {
+  background-color: #2d2d2d;
+}
+
+/* Dark mode styles for inputs and buttons */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: var(--input-background);
+  color: var(--input-foreground);
+  border-color: var(--border-color);
+}
+
+.dark button {
+  background-color: var(--card-background);
+  color: var(--card-foreground);
+}
+
+/* Dark mode styles for modals */
+.dark .modal-content {
+  background-color: var(--card-background);
+  color: var(--card-foreground);
 }

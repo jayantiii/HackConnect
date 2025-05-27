@@ -64,7 +64,7 @@ export default function MapView({
 
   return (
     <div className="w-full h-full relative">
-      <div className="absolute top-4 right-4 z-[1000] bg-white p-4 rounded-lg shadow-lg w-80">
+      <div className="absolute top-4 right-4 z-[1000] bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg w-80">
         <div className="flex items-center justify-center gap-2">
           <input
             type="text"
@@ -72,11 +72,11 @@ export default function MapView({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-            className="flex-1 p-2.5 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+            className="flex-1 p-2.5 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-black dark:text-white dark:bg-gray-700 dark:border-gray-600"
           />
           <button
             onClick={handleSearch}
-            className="bg-blue-600 text-white px-4 py-2.5 rounded hover:bg-blue-700 whitespace-nowrap"
+            className="bg-blue-600 text-white px-4 py-2.5 rounded hover:bg-blue-700 whitespace-nowrap dark:bg-blue-700 dark:hover:bg-blue-800"
           >
             Search
           </button>
@@ -87,6 +87,7 @@ export default function MapView({
         zoom={2}
         style={{ height: "100%", width: "100%" }}
         ref={mapRef}
+        className="dark:bg-gray-900"
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -99,7 +100,7 @@ export default function MapView({
             icon={markerIcon}
           >
             <Popup>
-              <div className="text-center">
+              <div className="text-center dark:text-gray-900">
                 <h3 className="font-bold mb-2">{university.name}</h3>
                 <p className="text-sm text-gray-600">
                   {university.address.city}, {university.address.state}
@@ -110,7 +111,7 @@ export default function MapView({
                 </p>
                 <button
                   onClick={() => onAddFilter(university.name)}
-                  className="mt-3 w-full bg-blue-100 hover:bg-blue-200 text-blue-800 text-sm font-medium py-1.5 px-3 rounded transition-colors"
+                  className="mt-3 w-full bg-blue-100 hover:bg-blue-200 text-blue-800 text-sm font-medium py-1.5 px-3 rounded transition-colors dark:bg-blue-900 dark:hover:bg-blue-800 dark:text-blue-100"
                 >
                   Show Hackathons
                 </button>
