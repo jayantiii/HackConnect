@@ -1,29 +1,19 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import L from "leaflet";
-import type { LatLngExpression } from "leaflet";
-import PostCreationModal from "./components/PostCreationModal";
 import dynamic from "next/dynamic";
+import PostCreationModal from "./components/PostCreationModal";
 import { universities, type University } from "./data/universities";
 import RegistrationModal, { type RegistrationData } from "./components/RegistrationModal";
 import RegisteredStudentsModal from "./components/RegisteredStudentsModal";
 
 const collegeNames = universities.map(u => u.name);
 
-// Custom marker icon (fixes default icon issue in Next.js)
-const markerIcon = new L.Icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowUrl: "https://unpkg.com/leaflet@1.9.3/dist/images/marker-shadow.png",
-  shadowSize: [41, 41],
+// Dynamically import MapView with no SSR
+const MapView = dynamic(() => import("./components/MapView"), {
+  ssr: false,
+  loading: () => <div>Loading map...</div>
 });
-
-const MapView = dynamic(() => import("./components/MapView"), { ssr: false });
 
 export default function Home() {
   const [email, setEmail] = useState("");
